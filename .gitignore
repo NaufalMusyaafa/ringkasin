@@ -1,0 +1,14 @@
+# Virtual environment
+venv/
+
+# Streamlit secrets (API key) - JANGAN diupload!
+.streamlit/secrets.toml
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# OS files
+.DS_Store
+Thumbs.db

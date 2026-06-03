@@ -27,9 +27,6 @@ st.markdown("""
 
     /* Header styling */
     h1 {
-        background: linear-gradient(135deg, #1a73e8 0%, #6c5ce7 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
         font-weight: 700 !important;
     }
 
@@ -317,7 +314,7 @@ Ringkas artikel berita berikut dalam 3-5 kalimat yang padat dan informatif.
 Gunakan bahasa Indonesia yang baik. Hanya tulis ringkasannya saja.
 
 Artikel:
-{teks[:3000]}
+{teks[:5000]}
 
 Ringkasan:"""
     response = client.chat.completions.create(
@@ -335,7 +332,7 @@ Jawab singkat, faktual, dan hanya berdasarkan informasi yang ada di artikel.
 Jika jawaban tidak ada di artikel, katakan "Informasi tidak tersedia dalam artikel."
 
 Artikel:
-{teks[:3000]}
+{teks[:5000]}
 
 Pertanyaan: {pertanyaan}
 
@@ -355,8 +352,54 @@ def hitung_kata(teks):
 # ─── Tab untuk dua fitur ─────────────────────────────────────────────────────
 tab1, tab2 = st.tabs(["📄 Summarization", "❓ Question Answering"])
 
+# Helper: render kartu ringkasan + metrik dari session_state
+def render_hasil_summary():
+    hasil = st.session_state["summary_hasil"]
+    artikel_tersimpan = st.session_state["summary_artikel"]
+    kata_asli = hitung_kata(artikel_tersimpan)
+    kata_ringkasan = hitung_kata(hasil)
+    persen_kompresi = round((1 - kata_ringkasan / kata_asli) * 100, 1) if kata_asli > 0 else 0
+
+    st.markdown(
+        f"""
+        <div class="result-card-summary">
+            <div class="card-header">📋 Hasil Ringkasan</div>
+            {hasil}
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+    st.markdown(
+        f"""
+        <div class="metric-container">
+            <div class="metric-card">
+                <div class="metric-value">{kata_asli:,}</div>
+                <div class="metric-label">Kata Artikel Asli</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-value">{kata_ringkasan:,}</div>
+                <div class="metric-label">Kata Ringkasan</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-value">{persen_kompresi}%</div>
+                <div class="metric-label">Kompresi</div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
 with tab1:
     st.subheader("Ringkasan Artikel")
+
+    # Invalidasi cache jika artikel berubah sejak terakhir di-summarize
+    if (
+        "summary_artikel" in st.session_state
+        and st.session_state["summary_artikel"] != artikel
+    ):
+        del st.session_state["summary_hasil"]
+        del st.session_state["summary_artikel"]
+
     if st.button("🔍 Ringkas Artikel", type="primary", key="btn_summary"):
         if not artikel.strip():
             st.warning("⚠️ Silakan masukkan artikel terlebih dahulu.")
@@ -364,41 +407,13 @@ with tab1:
             with st.spinner("🧠 AI sedang membaca dan meringkas artikel Anda... Mohon tunggu."):
                 hasil = summarize_artikel(artikel)
 
-            # Card hasil ringkasan (biru)
-            st.markdown(
-                f"""
-                <div class="result-card-summary">
-                    <div class="card-header">📋 Hasil Ringkasan</div>
-                    {hasil}
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
+            # Simpan hasil & artikel ke session_state agar bertahan saat ganti tab
+            st.session_state["summary_hasil"] = hasil
+            st.session_state["summary_artikel"] = artikel
 
-            # Metrik kompresi
-            kata_asli = hitung_kata(artikel)
-            kata_ringkasan = hitung_kata(hasil)
-            persen_kompresi = round((1 - kata_ringkasan / kata_asli) * 100, 1) if kata_asli > 0 else 0
-
-            st.markdown(
-                f"""
-                <div class="metric-container">
-                    <div class="metric-card">
-                        <div class="metric-value">{kata_asli:,}</div>
-                        <div class="metric-label">Kata Artikel Asli</div>
-                    </div>
-                    <div class="metric-card">
-                        <div class="metric-value">{kata_ringkasan:,}</div>
-                        <div class="metric-label">Kata Ringkasan</div>
-                    </div>
-                    <div class="metric-card">
-                        <div class="metric-value">{persen_kompresi}%</div>
-                        <div class="metric-label">Kompresi</div>
-                    </div>
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
+    # Tampilkan hasil jika ada di session_state (baik setelah klik maupun kembali dari tab lain)
+    if "summary_hasil" in st.session_state:
+        render_hasil_summary()
 
 with tab2:
     st.subheader("Tanya Jawab Berdasarkan Artikel")
